@@ -38,6 +38,7 @@ A real-time cryptocurrency price aggregation system built with Laravel, Livewire
 - MySQL/PostgreSQL
 - Redis (for queue)
 - Supervisor
+- Docker
 
 ### Installation
 
@@ -71,32 +72,7 @@ CRYPTO_EXCHANGES="binance,mexc,huobi"
 PRICE_FETCH_INTERVAL=5
 ```
 
-4. Set up database:
-```bash
-php artisan migrate
-```
-
-5. Start services:
-```bash
-# Start Laravel dev server
-php artisan serve
-
-# Start Vite for frontend assets
-npm run dev
-
-# Start Reverb WebSocket server
-php artisan reverb:start
-
-# Start Queue
-php artisan queue:work
-
-# Run scheduled tasks
-php artisan schedule:work
-```
-
-### Docker Setup (Optional)
-
-Start all services:
+4. Start all services:
 ```bash
 docker-compose up -d
 ```
@@ -106,109 +82,65 @@ Stop services:
 docker-compose down
 ```
 
-## Supervisor Setup (Production)
+### How It Works
 
-### Prerequisites
-- Ubuntu/Debian server
-- Supervisor installed: `sudo apt-get install supervisor`
+This section provides a detailed explanation of the workflow and interactions between the components of the application. Here's a step-by-step breakdown of how the system operates:
 
-### Installation Steps
+---
 
-1. Install Supervisor if not already installed:
-```bash
-sudo apt-get update
-sudo apt-get install supervisor
-```
+#### 1. **Job Scheduling and Execution**
+   - **Trigger**: A Laravel scheduled job is configured to run every 5 seconds (configurable via the `INTERVAL` environment variable).
+   - **Action**: The job dispatches a `FetchCryptoPrices` job to the Laravel queue.
+   - **Parallel Execution**: The `FetchCryptoPrices` job uses Guzzle's asynchronous requests to fetch cryptocurrency prices from all configured exchanges (e.g., Binance, MEXC, Huobi) simultaneously.
 
-2. Copy the Supervisor configuration file:
-```bash
-sudo cp supervisor/conf.d/laravel-services.conf /etc/supervisor/conf.d/
-```
+---
 
-Or create a symbolic link:
-```bash
-sudo ln -s /path/to/your/project/supervisor/conf.d/laravel-services.conf /etc/supervisor/conf.d/
-```
+#### 2. **Fetching Prices**
+   - **API Calls**: The job makes HTTP requests to the APIs of the configured exchanges to fetch the latest prices for the specified cryptocurrency pairs (e.g., BTCUSDC, BTCUSDT, BTCETH).
+   - **Error Handling**: If an API call fails, the job logs the error and retries the request (if applicable) or skips the exchange for that iteration.
+   - **Caching**: API responses are cached to reduce latency and avoid hitting rate limits. The cache is invalidated after the configured interval.
 
-3. Update Supervisor:
-```bash
-sudo supervisorctl reread
-sudo supervisorctl update
-```
+---
 
-4. Start services:
-```bash
-sudo supervisorctl start all
-```
+#### 3. **Calculating the Average Price**
+   - **Aggregation**: Once prices are fetched from all exchanges, the job calculates the average price for each cryptocurrency pair.
+   - **Validation**: The job ensures that prices from all exchanges are valid before calculating the average.
 
-### Available Commands
+---
 
-Check status of all services:
-```bash
-sudo supervisorctl status
-```
+#### 4. **Saving to the Database**
+   - **Database Insertion**: The calculated average prices are saved to the database in a `price_aggregate` table. Each record includes:
+     - Cryptocurrency pair (e.g., BTCUSDC)
+     - Average price
+     - Timestamp of the calculation
+     - List of exchanges used for the calculation
+   - **Database Structure**: The `price_aggregate` table is designed to store historical data for future analysis or reporting.
 
-Individual service management:
-```bash
-# Queue Worker
-sudo supervisorctl start queue:*
-sudo supervisorctl stop queue:*
-sudo supervisorctl restart queue:*
+---
 
-# Reverb (WebSocket)
-sudo supervisorctl start reverb:*
-sudo supervisorctl stop reverb:*
-sudo supervisorctl restart reverb:*
+#### 5. **Pushing Data to the Frontend**
+   - **Event Triggering**: After saving the data to the database, the job triggers a `PriceUpdated` event.
+   - **WebSocket Broadcast**: The `PriceUpdated` event broadcasts the updated cryptocurrency prices to all connected WebSocket clients.
+   - **Real-Time Updates**: The frontend listens for WebSocket messages and updates the UI in real-time to reflect the latest prices.
 
-# Reverb (Scheduler)
-sudo supervisorctl start scheduler:*
-sudo supervisorctl stop scheduler:*
-sudo supervisorctl restart scheduler:*
-```
+---
 
-### Log Locations
-- Queue Worker: `storage/logs/queue-worker.log`
-- Reverb: `storage/logs/reverb-worker.log`
-- Scheduler: `storage/logs/schedule-worker.log`
+#### 6. **Frontend Interaction**
+   - **Initial Load**: When the page loads, the frontend makes a REST API call to fetch the latest cryptocurrency prices from the database.
+   - **Real-Time Updates**: After the initial load, the frontend subscribes to the WebSocket channel to receive real-time updates.
+   - **UI Updates**: The LiveWire components dynamically update the UI to show:
+     - Current average price for each cryptocurrency pair
+     - Price change (indicated by green up or red down arrows)
+     - List of exchanges used for the calculation
+     - Timestamp of the last update
 
-### Troubleshooting
+---
 
-If services don't start:
-1. Check logs:
-```bash
-sudo supervisorctl tail queue:*
-sudo supervisorctl tail reverb:*
-sudo supervisorctl tail scheduler:*
-```
+#### 7. **Error Recovery and Stability**
+   - **WebSocket Reconnection**: If the WebSocket connection is lost due to internet fluctuations, the frontend automatically reconnects to the WebSocket server.
+   - **Job Retries**: If the `FetchCryptoPrices` job fails, Laravel's queue system retries the job based on the configured retry policy.
 
-2. Verify permissions:
-```bash
-sudo chown -R www-data:www-data storage/logs/
-sudo chmod -R 755 storage/logs/
-```
-
-3. Ensure Supervisor is running:
-```bash
-sudo service supervisor status
-```
-
-### Development Environment
-
-For local development, use these commands instead of Supervisor:
-
-```bash
-# Terminal 1 - Queue Worker
-php artisan queue:work
-
-# Terminal 2 - Reverb
-php artisan reverb:start
-
-# Terminal 3 - Vite/NPM (if needed)
-npm run dev
-
-# Terminal  - Scheduler
-php artisan schedule:work
-```
+---
 
 ## Design Decisions & Trade-offs
 

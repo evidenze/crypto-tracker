@@ -35,7 +35,7 @@ RUN composer install --no-interaction --no-dev --optimize-autoloader
 RUN npm install && npm run build
 
 # Copy supervisor configuration
-COPY supervisor/conf.d/laravel-services.conf /etc/supervisor/conf.d/
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache \
@@ -56,8 +56,8 @@ RUN php artisan config:cache \
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Expose port 9000
-EXPOSE 9000
+# Expose port 8000
+EXPOSE 8000
 
 # Set entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

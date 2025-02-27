@@ -20,7 +20,6 @@
     @livewireScripts
     <script>
         document.addEventListener('livewire:init', () => {
-            // Listen for price updates from WebSocket
             window.Echo.channel('prices')
                 .listen('.price.updated', (data) => {
                     Livewire.dispatch('price-updated', data);

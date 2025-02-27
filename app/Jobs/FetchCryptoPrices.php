@@ -143,9 +143,6 @@ class FetchCryptoPrices implements ShouldQueue
             }
         } finally {
             $lock->release();
-            // if ($this->attempts() === 0) {
-            //     self::dispatch()->delay(now()->addSeconds($this->interval));
-            // }
         }
     }
 
