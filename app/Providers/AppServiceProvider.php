@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Jobs\FetchCryptoPrices;
 use App\Services\PriceService;
 use Illuminate\Support\ServiceProvider;
 

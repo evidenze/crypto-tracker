@@ -82,6 +82,10 @@ Stop services:
 docker-compose down
 ```
 
+```bash
+Please note: The initial startup period for the application after Docker installation is approximately 15 seconds. This allows all services to be available before use.
+```
+
 ### How It Works
 
 This section provides a detailed explanation of the workflow and interactions between the components of the application. Here's a step-by-step breakdown of how the system operates:
